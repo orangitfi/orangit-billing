@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Package Management
+
+- Use `uv` for all Python package management tasks
+- Use `uv add` for installing packages (not `uv pip install`)
+- Use `pyproject.toml` for dependency management (not requirements.txt)
+- Always specify version constraints for dependencies
+- Use editable installs (-e) for development 

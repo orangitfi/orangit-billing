@@ -1,0 +1,9 @@
+---
+description: "Use logging for output always, have ability to scope verbosity."
+globs: **/*.py
+alwaysApply: true
+---
+- Use the logging module for all console output (do not use print() for status messages).
+- Configure log levels and allow adjusting verbosity via `-v/--verbose` CLI flags.
+- Use appropriate log levels (INFO, DEBUG, WARNING, ERROR) instead of printing directly.
+

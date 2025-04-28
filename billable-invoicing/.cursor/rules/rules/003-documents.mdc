@@ -1,0 +1,8 @@
+---
+description: "Use docstring and typing"
+globs: **/*.py
+alwaysApply: true
+---
+- Add type hints for all function and method parameters and return values.
+- Write a NumPy-style docstring for each public function, method, and class.
+- Ensure docstrings include sections such as Parameters, Returns, and Examples (when applicable).

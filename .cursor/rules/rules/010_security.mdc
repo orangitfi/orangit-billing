@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Security Rules
+
+- Regular dependency updates
+- Security scanning in CI pipeline
+- No secrets in code
+- Use environment variables for sensitive data
+- Regular security audits
+- Follow responsible disclosure policy
+- Keep security documentation up to date

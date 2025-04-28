@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Code Quality Rules
+
+- Maintain test coverage above 80%
+- Regular performance testing
+- Code complexity limits
+- Regular dependency updates
+- Automated code quality checks
+- Performance benchmarking
+- Regular technical debt review

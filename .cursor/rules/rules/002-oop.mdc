@@ -1,0 +1,8 @@
+---
+description: "Use object oriented programming model"
+globs: **/*.py
+alwaysApply: true
+---
+- Use object-oriented design for all Python code.
+- Encapsulate functionality within classes and methods (avoid global procedural code).
+- Organize modules into classes; limit execution of code at import time.

@@ -1,0 +1,12 @@
+mode: Mainline
+branches:
+  main:
+    regex: ^master$|^main$
+    tag: ''
+    increment: Patch
+    is-release-branch: true
+    is-mainline: true
+  develop:
+    regex: ^(?!(main|master)$)
+    track-merge-target: true
+    tag: 'dev'

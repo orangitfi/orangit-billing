@@ -1,0 +1,33 @@
+[project]
+name = "billable_invoicing"
+version = "0.1.0"
+description = "Transform hour marking system data from AgileDay to invoicing system data"
+requires-python = ">=3.13"
+readme = "README.md"
+authors = [
+    { name = "Sami Bister (OrangIT)", email = "sami.bister@orangit.fi" } 
+]
+dependencies = [
+    "click>=8.1.7",
+    "requests>=2.31.0",
+    "python-dateutil>=2.8.2",
+    "pandas>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.2.0",
+    "pytest>=8.0.0"
+]
+
+[project.scripts]
+fixed-fee-invoicing = "billable_invoicing:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+select = ["E", "F", "I", "N", "W", "B", "UP", "PL", "RUF"] 

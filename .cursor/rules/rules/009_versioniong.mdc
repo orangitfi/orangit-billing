@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Versioning Rules
+
+- Follow Semantic Versioning (SemVer)
+- Major version: Breaking changes
+- Minor version: New features, no breaking changes
+- Patch version: Bug fixes and minor changes
+- Use GitVersion for automated versioning
+- Document all changes in CHANGELOG.md
+- Tag all releases

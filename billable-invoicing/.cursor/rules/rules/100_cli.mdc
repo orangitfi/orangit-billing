@@ -1,0 +1,8 @@
+---
+description: "Use click to provide CLI interface."
+globs: **/*.py
+alwaysApply: true
+---
+- Implement the command-line interface using the Click library (do not use argparse or manual parsing).
+- Define CLI commands and options with @click.command, @click.option, etc., for consistency.
+- Provide clear help text and usage examples through Click’s mechanisms.

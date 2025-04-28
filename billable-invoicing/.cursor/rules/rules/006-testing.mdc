@@ -1,0 +1,8 @@
+---
+description: "Use pytest for unittesting, have categories with custom markings"
+globs: **/*.py
+alwaysApply: true
+---
+- Write tests using the pytest framework (avoid using unittest or other test frameworks).
+- Mark tests with categories (e.g., `@pytest.mark.unit`, `@pytest.mark.integration`) to group test types.
+- Structure test files and functions for readability; use pytest features like fixtures and parametrize as needed.

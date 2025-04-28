@@ -1,0 +1,9 @@
+---
+description: "Use ruff for linting."
+globs: **/*.py
+alwaysApply: true
+---
+- Use Ruff for all Python linting and formatting tasks.
+- Do not use or require separate tools like flake8, pylint, black, or isort (Ruff covers these).
+- Ensure code adheres to Ruff’s style rules (run `uvx ruff check --fix` to auto-format when possible).
+

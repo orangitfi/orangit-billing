@@ -1,0 +1,77 @@
+# Git Workflow Rules
+
+## Trunk-Based Development Principles
+
+### Main Branch
+- `main` is the trunk and single source of truth
+- `main` branch must always be deployable
+- Direct commits to `main` are prohibited
+- All changes must go through pull requests
+
+### Feature Development
+- Create short-lived feature branches from `main`
+- Branch naming convention: 
+  - `feature/[ticket-number]-brief-description`
+  - `fix/[ticket-number]-brief-description`
+  - `chore/[ticket-number]-brief-description`
+- Keep branches small and focused
+- Maximum lifetime of a feature branch: 2 days
+- Rebase feature branches on `main` before merging
+
+### Pull Requests
+- Required for all changes
+- Must be reviewed by at least one code owner
+- Must pass all automated checks:
+  - Unit tests
+  - Integration tests
+  - Ruff linting
+  - Type checking
+- Squash merge to maintain clean history
+- Delete branch after merging
+
+### Commits
+- Use conventional commit messages:
+  ```
+  type(scope): description
+
+  [optional body]
+  [optional footer]
+  ```
+- Types: feat, fix, docs, style, refactor, test, chore
+- Keep commits atomic and focused
+- Sign all commits with GPG
+
+### Release Process
+- Use GitVersion for semantic versioning
+- Tag releases in `main` branch
+- Create release notes for each version
+- Hotfixes follow same PR process but with higher priority
+
+### CI/CD
+- All PRs must trigger:
+  - Build verification
+  - Test suite
+  - Linting checks
+  - Security scans
+- Automated deployments from `main` to staging
+- Manual approval for production deployments
+
+### Code Review Guidelines
+- Review within 24 hours
+- Focus on:
+  - Code quality
+  - Test coverage
+  - Security implications
+  - Performance impacts
+- Use approved PR templates
+
+### Documentation
+- Update README.md when adding new features
+- Keep CHANGELOG.md up to date
+- Document breaking changes clearly
+- Include migration guides when needed 
+globs: 
+alwaysApply: true
+---
+- We use trunk based development
+- 

@@ -1,0 +1,8 @@
+---
+description: "Use UV to manage packets and python"
+globs: 
+alwaysApply: true
+---
+- Manage project dependencies with **uv** (do not use pip/pipenv/conda for this project).
+- Add or remove packages using `uv add` / `uv remove` commands, which update pyproject.toml and lock files.
+- Rely on uv’s automated virtual environment and locking for consistent dependency resolution.

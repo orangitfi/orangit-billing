@@ -1,5 +1,5 @@
 #!/bin/zsh
-
+echo "Starting hours invoicing"
 # Get current month and year
 current_month=$(date '+%m')
 current_year=$(date '+%Y')
@@ -38,13 +38,27 @@ START_DATE="$previous_year-$previous_month-01"
 END_DATE="$previous_year-$previous_month-$last_day"
 
 # move to execution directory
-cd $HOME/src/orangit/tools/src/fixed_fee_invoicing/fixed-fee-invoicing
+cd $HOME/src/orangit/orangit-billing/billable-invoicing
+echo "Current directory:"
+pwd
+
+echo "Running: uv run python -m billable_invoicing fetch-hours \
+  --company \"OrangIT Oy\" \
+  --start-date \"$START_DATE\" \
+  --end-date \"$END_DATE\" \
+  --output-path $HOME/laskutus/$DATE_STR/ \
+  --customer-data \"$HOME/laskutus/$DATE_STR/customer.csv\" \
+  --rates-file \"$HOME/laskutus/$DATE_STR/rates.csv\" \
+  --result-file \"$HOME/laskutus/$DATE_STR/workday-$DATE_STR.csv\""
+
+# move to execution directory
+cd $HOME/src/orangit/orangit-billing/billable-invoicing
 # Construct and run the Python command
 uv run python -m billable_invoicing fetch-hours \
-     --company "OrangIT Oy" \
+    --company "OrangIT Oy" \
     --start-date "$START_DATE" \
     --end-date "$END_DATE" \
     --output-path $HOME/laskutus/$DATE_STR/ \
-	--customer-data "$HOME/laskutus/$DATE_STR/customer.csv" \
-	--rates-file "$HOME/laskutus/$DATE_STR/rates.csv" \
-	--result-file "$HOME/laskutus/$DATE_STR/workday-$DATE_STR.csv" 											
+    --customer-data "$HOME/laskutus/$DATE_STR/customer.csv" \
+    --rates-file "$HOME/laskutus/$DATE_STR/rates.csv" \
+    --result-file "$HOME/laskutus/$DATE_STR/workday-$DATE_STR.csv"

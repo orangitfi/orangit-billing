@@ -495,13 +495,17 @@ class WorkdayTransformer:
             result_file_path = Path(result_file_path).resolve()
             result_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Group entries by customer ID
-            entries_by_customer: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+            # Group entries by group invoice key (Group invoice or customer ID)
+            groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+            group_to_customer_info: Dict[str, Dict[str, Any]] = {}
             for entry in processed_entries:
                 customer_info = entry['customer_info']
-                customer_id = customer_info.get('Invoice Info A2 Ext Id', '')
-                if customer_id:
-                    entries_by_customer[customer_id].append(entry)
+                group_invoice = customer_info.get('Group invoice') or customer_info.get('Invoice Info A2 Ext Id', '')
+                if group_invoice:
+                    groups[group_invoice].append(entry)
+                    # Always use the customer_info from the first entry in the group
+                    if group_invoice not in group_to_customer_info:
+                        group_to_customer_info[group_invoice] = customer_info
 
             # Generate output file
             temp_file = result_file_path.with_suffix('.tmp')
@@ -516,56 +520,41 @@ class WorkdayTransformer:
                 # Add the constant header lines
                 file_content = [
                     "Invoice transfer into Workday;;;Company code:;263;;;Invoicing total;;;;;;;;;;;;;",
-                    # Second line will be updated after calculating total
-                    "Title information/Row information;;;Reply-to-email:;laskutus@barona.fi;;;0.00;;;;;;;;;;;;;",
+                    f"Title information/Row information;;;Reply-to-email:;{self.reply_email};;;0.00;;;;;;;;;;;;;",
                     "Row type H= Title;ConnectID;Invoice A2 ID;Account A2 ID;Free text;Accounting date[YYYY-MM-DD];Invoicing date[YYYY-MM-DD];Our reference;Customer reference;Period Start date [YYYY-MM-DD];Period End date [YYYY-MM-DD];Contract number;PO number;Appendix 1;Appendix 2;Appendix 3;Appendix 4;;;Source System;",
                     "Row type R= Row;ConnectID;Grouping info (Memo);Sales Item;Description;Quantity;Unit of measure;Unit price;Dim 1: Cost center;Dim 2: Business line (Function);Dim 3: Area;Dim 4: Service;Dim 5: Project;Dim 7: Counter company;Dim 8: Work type;Dim 10: Official;Dim 11: Employee;Dim 13: Company;Tax_Applicability;Tax_Code;"
                 ]
 
-                # Process each customer's entries
-                for customer_id, entries in entries_by_customer.items():
+                # Process each group (invoice)
+                for group_key, entries in groups.items():
                     connect_id = str(uuid.uuid4())
-                    customer_info = entries[0]['customer_info']
-                    customer_name = customer_info.get('Client', 'Unknown')
-                    service_name = customer_info.get('Service name', 'Unknown Service')
-                    if customer_name == 'Unknown' or service_name == 'Unknown Service':
-                        logger.warning(
-                            "Missing customer info - ID: %s, Available fields: %s",
-                            customer_id,
-                            list(customer_info.keys())
-                        )
-                    logger.info(
-                        "Processing customer: %s, Service: %s (ID: %s)",
-                        customer_name,
-                        service_name,
-                        customer_id
-                    )
-                    header_count += 1
-
-                    # Add header row
-                    header_row = [
-                        "H", connect_id, customer_id,
-                        customer_info.get('Account A2 Ext Id', ''), "",
-                        period_start.strftime("%Y-%m-%d"),
-                        today.strftime("%Y-%m-%d"),
-                        customer_info.get('Our Reference', ''),
-                        customer_info.get('Customer Reference', ''),
-                        period_start.strftime("%Y-%m-%d"),
-                        period_end.strftime("%Y-%m-%d"),
-                        customer_info.get('Contract Number', ''),
-                        "", "", "", "", "", "", "",
-                        self.source_system, ""
-                    ]
-                    file_content.append(";".join(header_row))
-
+                    customer_info = group_to_customer_info[group_key]
+                    
+                    # Collect non-zero rows first
+                    invoice_rows = []
+                    invoice_total = 0.0
+                    
                     # Process each entry (already grouped by project and task)
                     for entry in entries:
                         task_hours = entry['actualHours']
                         hourly_rate = entry['hourlyRate']
                         task_amount = task_hours * hourly_rate
+                        
+                        # Skip rows with zero amount
+                        if task_amount == 0:
+                            logger.debug(
+                                "Skipping zero amount row - Project: %s, Task: %s, Hours: %.2f, Rate: %.2f",
+                                entry['projectName'],
+                                entry['projectTask'],
+                                task_hours,
+                                hourly_rate
+                            )
+                            continue
+                            
                         total_amount += task_amount
                         total_hours += task_hours
                         detail_count += 1
+                        invoice_total += task_amount
 
                         logger.info(
                             "Project: %s, Task: %s, Hours: %.2f, Rate: %.2f, Amount: %.2f",
@@ -595,7 +584,34 @@ class WorkdayTransformer:
                             customer_info.get('Tax_Code', ''),
                             ""
                         ]
-                        file_content.append(";".join(detail_row))
+                        invoice_rows.append(";".join(detail_row))
+
+                    # Only write invoice if it has non-zero rows
+                    if invoice_rows:
+                        header_count += 1
+                        # Add header row (always use customer_info fields, not group key)
+                        header_row = [
+                            "H", connect_id, customer_info.get('Invoice Info A2 Ext Id', ''),
+                            customer_info.get('Account A2 Ext ID', ''), "",
+                            period_start.strftime("%Y-%m-%d"),
+                            today.strftime("%Y-%m-%d"),
+                            customer_info.get('Our Reference', ''),
+                            customer_info.get('CUSTOMER_REFERENCE', ''),
+                            period_start.strftime("%Y-%m-%d"),
+                            period_end.strftime("%Y-%m-%d"),
+                            customer_info.get('Contract number', ''),
+                            "", "", "", "", "", "", "",
+                            self.source_system, ""
+                        ]
+                        file_content.append(";".join(header_row))
+                        
+                        # Add all non-zero rows
+                        file_content.extend(invoice_rows)
+                    else:
+                        logger.info(
+                            "Skipping invoice for group %s - no non-zero amount rows",
+                            group_key
+                        )
 
                 # Log summary before writing file
                 logger.info(f"\nSummary:")
@@ -612,7 +628,7 @@ class WorkdayTransformer:
                     f.write("\n".join(file_content))
 
                 # Write the invoicing summary
-                self._write_invoicing_summary(entries_by_customer, result_file_path)
+                self._write_invoicing_summary(groups, result_file_path)
 
                 # Rename temp file to final file
                 temp_file.replace(result_file_path)

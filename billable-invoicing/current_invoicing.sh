@@ -27,7 +27,7 @@ START_DATE="$current_year-$current_month-01"
 END_DATE="$current_year-$current_month-$last_day"
 
 # move to execution directory
-cd $HOME/src/orangit/tools/src/fixed_fee_invoicing/fixed-fee-invoicing
+cd $HOME/src/orangit/orangit-billing/billable-invoicing
 # Construct and run the Python command
 uv run python -m billable_invoicing fetch-hours \
     --company "OrangIT Oy" \

@@ -1,0 +1,9 @@
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Palvelualusta, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Omabiopankki, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Sovellusten infra, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Palvelualusta, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Omabiopankki, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Sovellusten infra, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Palvelualusta, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Omabiopankki, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba
+Internal rate not found - Client: Wunderdog Oy, Service: Suomen Biopankkien Osuuskunta / Contentful, Task: Sovellusten infra, Project ID: 59682ce8-879f-478d-9cda-d98fecd2e4ba

@@ -22,9 +22,9 @@ previous_month=$(printf "%02d" $previous_month)
 DATE_STR="$previous_year-$previous_month"
 
 # move to execution directory
-cd $HOME/src/orangit/tools/src/fixed_fee_invoicing/fixed-fee-invoicing
+cd $HOME/src/orangit/orangit-billing/fixed_fee_invoicing
 # Construct and run the Python command
-uv run python -m fixed_fee_invoicing \
+uv run python -m fixed-fee-invoicing \
 	 --config $HOME/laskutus/$DATE_STR/customer.csv \
 	 --input $HOME/laskutus/$DATE_STR/passtrhough.csv \
 	 --output $HOME/laskutus/$DATE_STR/fixed-fee-$DATE_STR.csv \

@@ -35,13 +35,19 @@ fi
 # Construct the dates
 DATE_STR="$previous_year-$previous_month"
 START_DATE="$previous_year-$previous_month-01"
-END_DATE="$previous_year-$previous_month-$last_day"
+
+# Calculate end date (first day of next month)
+if [ $previous_month -eq 12 ]; then
+	END_DATE="$((previous_year + 1))-01-01"
+else
+	next_month=$((previous_month + 1))
+	next_month=$(printf "%02d" $next_month)
+	END_DATE="$previous_year-$next_month-01"
+fi
 
 # move to execution directory
 cd $HOME/src/orangit/orangit-billing/billable-invoicing
 
-# move to execution directory
-cd $HOME/src/orangit/orangit-billing/billable-invoicing
 # Construct and run the Python command
 uv run python -m billable_invoicing fetch-hours \
     --company "OrangIT Oy" \

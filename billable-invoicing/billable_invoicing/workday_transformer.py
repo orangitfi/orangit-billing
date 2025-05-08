@@ -485,11 +485,13 @@ class WorkdayTransformer:
             
             # Calculate period dates
             today = datetime.date.today()
-            period_start = datetime.date(today.year, today.month, 1)
-            if today.month == DECEMBER:
-                period_end = datetime.date(today.year + 1, 1, 1) - datetime.timedelta(days=1)
+            # Calculate previous month
+            if today.month == 1:
+                period_start = datetime.date(today.year - 1, 12, 1)
+                period_end = datetime.date(today.year, 1, 1) - datetime.timedelta(days=1)
             else:
-                period_end = datetime.date(today.year, today.month + 1, 1) - datetime.timedelta(days=1)
+                period_start = datetime.date(today.year, today.month - 1, 1)
+                period_end = datetime.date(today.year, today.month, 1) - datetime.timedelta(days=1)
 
             # Ensure output directory exists
             result_file_path = Path(result_file_path).resolve()
@@ -593,12 +595,12 @@ class WorkdayTransformer:
                         header_row = [
                             "H", connect_id, customer_info.get('Invoice Info A2 Ext Id', ''),
                             customer_info.get('Account A2 Ext ID', ''), "",
-                            period_start.strftime("%Y-%m-%d"),
+                            datetime.date(today.year, today.month, 1).strftime("%Y-%m-%d"),  # Accounting date: 1st of current month
                             today.strftime("%Y-%m-%d"),
                             customer_info.get('Our Reference', ''),
                             customer_info.get('CUSTOMER_REFERENCE', ''),
-                            period_start.strftime("%Y-%m-%d"),
-                            period_end.strftime("%Y-%m-%d"),
+                            period_start.strftime("%Y-%m-%d"),  # Period Start: 1st of previous month
+                            period_end.strftime("%Y-%m-%d"),    # Period End: last day of previous month
                             customer_info.get('Contract number', ''),
                             "", "", "", "", "", "", "",
                             self.source_system, ""

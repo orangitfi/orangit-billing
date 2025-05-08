@@ -6,7 +6,7 @@ import logging
 import uuid
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +261,13 @@ class WorkdayTransformer:
     def _write_invoicing_summary(
         self,
         entries_by_customer: Dict[str, List[Dict[str, Any]]],
-        result_file_path: Path
+        result_file_path: Path,
+        total_amount: float,
+        total_hours: float,
+        total_invoices: int,
+        total_lines: int,
+        first_day: Optional[datetime.date],
+        last_day: Optional[datetime.date]
     ) -> None:
         """Write a summary of invoicing data.
         
@@ -271,23 +277,30 @@ class WorkdayTransformer:
             Dictionary of entries grouped by customer ID
         result_file_path : Path
             Path to the result file, used to determine summary file path
+        total_amount : float
+            Total amount across all invoices
+        total_hours : float
+            Total hours across all invoices
+        total_invoices : int
+            Total number of invoices
+        total_lines : int
+            Total number of invoice lines
+        first_day : Optional[datetime.date]
+            First day of hours
+        last_day : Optional[datetime.date]
+            Last day of hours
         """
         summary_file = result_file_path.with_stem(f"{result_file_path.stem}_summary")
         
         try:
             with open(summary_file, 'w', encoding='utf-8', newline='') as f:
-                # Track overall totals
-                total_invoices = 0  # Number of customers/invoices
-                total_lines = 0     # Total number of detail lines
-                grand_total = 0.0   # Total amount across all invoices
-                
+                # Write customer details
                 for customer_id, entries in entries_by_customer.items():
                     if not entries:
                         continue
                         
                     customer_info = entries[0]['customer_info']
                     client_name = customer_info.get('Client', 'Unknown')
-                    total_invoices += 1
                     
                     # Write customer/client header
                     f.write(f"Customer: {client_name}\n")
@@ -310,7 +323,6 @@ class WorkdayTransformer:
                         amount = total_hours * hour_rate
                         customer_total += amount
                         customer_lines += 1
-                        total_lines += 1
                         
                         f.write(f"Service: {service}\n")
                         f.write(f"Task: {task}\n")
@@ -322,24 +334,100 @@ class WorkdayTransformer:
                     # Write customer total and line count
                     f.write(f"Total for {client_name}: {self._format_decimal(customer_total)} ({customer_lines} lines)\n")
                     f.write("=" * 80 + "\n\n")
-                    grand_total += customer_total
                 
                 # Write overall summary at the end
                 f.write("\nOVERALL SUMMARY\n")
                 f.write("=" * 80 + "\n")
                 f.write(f"Total number of invoices: {total_invoices}\n")
                 f.write(f"Total number of invoice lines: {total_lines}\n")
-                f.write(f"Total amount across all invoices: {self._format_decimal(grand_total)}\n")
+                f.write(f"Total amount across all invoices: {self._format_decimal(total_amount)}\n")
+                if first_day and last_day:
+                    f.write(f"First day of hours: {first_day.strftime('%Y-%m-%d')}\n")
+                    f.write(f"Last day of hours: {last_day.strftime('%Y-%m-%d')}\n")
                 f.write("=" * 80 + "\n")
                     
             logger.info("Wrote invoicing summary to %s", summary_file)
             logger.info(
                 "Summary totals - Invoices: %d, Lines: %d, Amount: %.2f",
-                total_invoices, total_lines, grand_total
+                total_invoices, total_lines, total_amount
             )
+            if first_day and last_day:
+                logger.info(
+                    "Hours period - First day: %s, Last day: %s",
+                    first_day.strftime('%Y-%m-%d'),
+                    last_day.strftime('%Y-%m-%d')
+                )
         except Exception as e:
             logger.error("Failed to write invoicing summary: %s", str(e))
             raise
+
+    def _check_missing_orangit_projects(
+        self,
+        hours_by_project: Dict[str, List[Dict[str, Any]]],
+        processed_entries: List[Dict[str, Any]],
+        result_file_path: Path
+    ) -> None:
+        """Check for OrangIT Oy projects that are not included in the final result.
+        
+        Parameters
+        ----------
+        hours_by_project : Dict[str, List[Dict[str, Any]]]
+            Dictionary of hour entries grouped by project ID
+        processed_entries : List[Dict[str, Any]]
+            List of processed entries that made it to the final result
+        result_file_path : Path
+            Path to the result file, used to determine the output path for missing projects
+        """
+        # Get set of project IDs that made it to the final result
+        included_project_ids = {entry['projectId'] for entry in processed_entries}
+        
+        # Track missing projects
+        missing_projects: List[Dict[str, Any]] = []
+        
+        # Check each project in raw hours
+        for project_id, entries in hours_by_project.items():
+            # Skip if project is already included
+            if project_id in included_project_ids:
+                continue
+                
+            # Check if any entries are from OrangIT Oy
+            orangit_entries: List[Dict[str, Any]] = [
+                entry for entry in entries
+                if entry.get('employeeCompany', '').lower() == 'orangit oy'.lower()
+                and entry.get('billable') == 'True'
+            ]
+            
+            if orangit_entries:
+                # Calculate total hours for this project
+                total_hours = sum(float(entry.get('actualHours', 0)) for entry in orangit_entries)
+                
+                # Get project details from the first entry
+                first_entry = orangit_entries[0]
+                missing_projects.append({
+                    'customerName': first_entry.get('customerName', 'Unknown'),
+                    'projectName': first_entry.get('projectName', 'Unknown'),
+                    'projectId': project_id,
+                    'totalHours': total_hours
+                })
+                
+                # Log warning
+                logger.warning(
+                    "OrangIT Oy project not included in result - Customer: %s, Project: %s (ID: %s), Total Hours: %.2f",
+                    first_entry.get('customerName', 'Unknown'),
+                    first_entry.get('projectName', 'Unknown'),
+                    project_id,
+                    total_hours
+                )
+        
+        # Write missing projects to CSV if any found
+        if missing_projects:
+            missing_file = result_file_path.with_stem(f"{result_file_path.stem}_projects_not_included")
+            with missing_file.open('w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=['customerName', 'projectName', 'projectId', 'totalHours'])
+                writer.writeheader()
+                for project in sorted(missing_projects, key=lambda x: (x['customerName'], x['projectName'])):
+                    writer.writerow(project)
+            logger.info("Wrote %d missing OrangIT Oy projects to %s", len(missing_projects), missing_file)
 
     def transform_to_workday(
         self,
@@ -386,6 +474,10 @@ class WorkdayTransformer:
             processed_entries = []
             projects_without_hours = []
             
+            # Track first and last day of hours
+            first_day = None
+            last_day = None
+            
             # Process each active customer project
             for project_id, customer_info in customer_data.items():
                 project_hours = hours_by_project.get(project_id, [])
@@ -411,6 +503,18 @@ class WorkdayTransformer:
                 
                 for entry in project_hours:
                     if entry.get('billable') == 'True':  # Only process billable hours
+                        # Track first and last day
+                        date_str = entry.get('date', '')
+                        if date_str:
+                            try:
+                                entry_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                                if first_day is None or entry_date < first_day:
+                                    first_day = entry_date
+                                if last_day is None or entry_date > last_day:
+                                    last_day = entry_date
+                            except ValueError:
+                                logger.warning(f"Invalid date format in entry: {date_str}")
+                        
                         # If included_hours is 'All', include all billable hours
                         # If included_hours is 'Orangit', only include hours from Orangit Oy
                         if included_hours.lower() == 'all':
@@ -473,7 +577,8 @@ class WorkdayTransformer:
                                 'projectTask': task_name,
                                 'actualHours': total_hours,
                                 'hourlyRate': hourly_rate,
-                                'customer_info': customer_info
+                                'customer_info': customer_info,
+                                'date': task_entries[0].get('date', '')  # Add date to processed entry
                             }
                             processed_entries.append(processed_entry)
                         except (ValueError, TypeError) as e:
@@ -482,6 +587,9 @@ class WorkdayTransformer:
                             )
             
             logger.info("Processed %d billable entries for active customers", len(processed_entries))
+            
+            # Check for missing OrangIT Oy projects
+            self._check_missing_orangit_projects(hours_by_project, processed_entries, result_file_path)
             
             # Calculate period dates
             today = datetime.date.today()
@@ -621,6 +729,8 @@ class WorkdayTransformer:
                 logger.info(f"Number of invoice rows (R rows): {detail_count}")
                 logger.info(f"Total hours: {total_hours:.2f}")
                 logger.info(f"Total amount: {total_amount:.2f}")
+                if first_day and last_day:
+                    logger.info(f"Hours period - First day: {first_day.strftime('%Y-%m-%d')}, Last day: {last_day.strftime('%Y-%m-%d')}")
 
                 # Now that we have the total, update the second line
                 file_content[1] = f"Title information/Row information;;;Reply-to-email:;{self.reply_email};;;{self._format_decimal(total_amount)};;;;;;;;;;;;;"
@@ -629,8 +739,8 @@ class WorkdayTransformer:
                 with open(temp_file, mode='w', encoding='cp1252', errors='replace', newline='') as f:
                     f.write("\n".join(file_content))
 
-                # Write the invoicing summary
-                self._write_invoicing_summary(groups, result_file_path)
+                # Write the invoicing summary with the same totals
+                self._write_invoicing_summary(groups, result_file_path, total_amount, total_hours, header_count, detail_count, first_day, last_day)
 
                 # Rename temp file to final file
                 temp_file.replace(result_file_path)

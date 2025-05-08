@@ -269,27 +269,7 @@ class WorkdayTransformer:
         first_day: Optional[datetime.date],
         last_day: Optional[datetime.date]
     ) -> None:
-        """Write a summary of invoicing data.
-        
-        Parameters
-        ----------
-        entries_by_customer : Dict[str, List[Dict[str, Any]]]
-            Dictionary of entries grouped by customer ID
-        result_file_path : Path
-            Path to the result file, used to determine summary file path
-        total_amount : float
-            Total amount across all invoices
-        total_hours : float
-            Total hours across all invoices
-        total_invoices : int
-            Total number of invoices
-        total_lines : int
-            Total number of invoice lines
-        first_day : Optional[datetime.date]
-            First day of hours
-        last_day : Optional[datetime.date]
-            Last day of hours
-        """
+        """Write a summary of invoicing data."""
         summary_file = result_file_path.with_stem(f"{result_file_path.stem}_summary")
         
         try:
@@ -317,16 +297,16 @@ class WorkdayTransformer:
                     customer_total = 0.0
                     customer_lines = 0
                     for (service, task), task_entries in service_task_entries.items():
-                        total_hours = sum(entry['actualHours'] for entry in task_entries)
+                        task_hours = sum(entry['actualHours'] for entry in task_entries)
                         # All entries in a task group should have the same rate
                         hour_rate = task_entries[0]['hourlyRate']
-                        amount = total_hours * hour_rate
+                        amount = task_hours * hour_rate
                         customer_total += amount
                         customer_lines += 1
                         
                         f.write(f"Service: {service}\n")
                         f.write(f"Task: {task}\n")
-                        f.write(f"Hours: {self._format_decimal(total_hours)}\n")
+                        f.write(f"Hours: {self._format_decimal(task_hours)}\n")
                         f.write(f"Rate: {self._format_decimal(hour_rate)}\n")
                         f.write(f"Amount: {self._format_decimal(amount)}\n")
                         f.write("\n")
@@ -341,6 +321,7 @@ class WorkdayTransformer:
                 f.write(f"Total number of invoices: {total_invoices}\n")
                 f.write(f"Total number of invoice lines: {total_lines}\n")
                 f.write(f"Total amount across all invoices: {self._format_decimal(total_amount)}\n")
+                f.write(f"Total number of hours: {self._format_decimal(total_hours)}\n")
                 if first_day and last_day:
                     f.write(f"First day of hours: {first_day.strftime('%Y-%m-%d')}\n")
                     f.write(f"Last day of hours: {last_day.strftime('%Y-%m-%d')}\n")
@@ -367,67 +348,55 @@ class WorkdayTransformer:
         processed_entries: List[Dict[str, Any]],
         result_file_path: Path
     ) -> None:
-        """Check for OrangIT Oy projects that are not included in the final result.
-        
+        """Check for missing Orangit projects and write them to a file.
+
         Parameters
         ----------
         hours_by_project : Dict[str, List[Dict[str, Any]]]
-            Dictionary of hour entries grouped by project ID
+            Dictionary of hour entries by project
         processed_entries : List[Dict[str, Any]]
-            List of processed entries that made it to the final result
+            List of processed entries
         result_file_path : Path
-            Path to the result file, used to determine the output path for missing projects
+            Path to the result file
         """
-        # Get set of project IDs that made it to the final result
-        included_project_ids = {entry['projectId'] for entry in processed_entries}
+        # Get the directory of the result file
+        output_dir = result_file_path.parent
         
-        # Track missing projects
-        missing_projects: List[Dict[str, Any]] = []
+        # Create missing rates file path in the same directory
+        missing_rates_path = output_dir / "missing_from_rates.txt"
         
-        # Check each project in raw hours
-        for project_id, entries in hours_by_project.items():
-            # Skip if project is already included
-            if project_id in included_project_ids:
-                continue
-                
-            # Check if any entries are from OrangIT Oy
-            orangit_entries: List[Dict[str, Any]] = [
-                entry for entry in entries
-                if entry.get('employeeCompany', '').lower() == 'orangit oy'.lower()
-                and entry.get('billable') == 'True'
-            ]
-            
-            if orangit_entries:
-                # Calculate total hours for this project
-                total_hours = sum(float(entry.get('actualHours', 0)) for entry in orangit_entries)
-                
-                # Get project details from the first entry
-                first_entry = orangit_entries[0]
-                missing_projects.append({
-                    'customerName': first_entry.get('customerName', 'Unknown'),
-                    'projectName': first_entry.get('projectName', 'Unknown'),
-                    'projectId': project_id,
-                    'totalHours': total_hours
-                })
-                
-                # Log warning
-                logger.warning(
-                    "OrangIT Oy project not included in result - Customer: %s, Project: %s (ID: %s), Total Hours: %.2f",
-                    first_entry.get('customerName', 'Unknown'),
-                    first_entry.get('projectName', 'Unknown'),
-                    project_id,
-                    total_hours
-                )
+        # Get all project IDs from hours
+        all_project_ids = set(hours_by_project.keys())
         
-        # Write missing projects to CSV if any found
+        # Get processed project IDs
+        processed_project_ids = {entry['projectId'] for entry in processed_entries}
+        
+        # Find missing projects
+        missing_projects = all_project_ids - processed_project_ids
+        
         if missing_projects:
-            missing_file = result_file_path.with_stem(f"{result_file_path.stem}_projects_not_included")
-            with missing_file.open('w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=['customerName', 'projectName', 'projectId', 'totalHours'])
-                writer.writeheader()
-                for project in sorted(missing_projects, key=lambda x: (x['customerName'], x['projectName'])):
-                    writer.writerow(project)
-            logger.info("Wrote %d missing OrangIT Oy projects to %s", len(missing_projects), missing_file)
+            logger.warning(f"Found {len(missing_projects)} projects with missing rates")
+            
+            # Write missing projects to file
+            with missing_rates_path.open('w') as f:
+                for project_id in missing_projects:
+                    # Get the first entry for this project to get client and service info
+                    project_entries = hours_by_project[project_id]
+                    if project_entries:
+                        first_entry = project_entries[0]
+                        client = first_entry.get('clientName', 'Unknown')
+                        service = first_entry.get('projectName', 'Unknown')
+                        task = first_entry.get('projectTask', 'Unknown')
+                        
+                        f.write(
+                            f"Internal rate not found - Client: {client}, "
+                            f"Service: {service}, Task: {task}, "
+                            f"Project ID: {project_id}\n"
+                        )
+        else:
+            logger.info("No projects with missing rates found")
+            # Create an empty file if no missing rates
+            missing_rates_path.touch()
 
     def transform_to_workday(
         self,
@@ -469,6 +438,13 @@ class WorkdayTransformer:
             # Read and group raw hours
             hours_by_project = self._read_raw_hours(raw_hours_path)
             logger.info("Successfully read raw hours from %s", raw_hours_path)
+            
+            # Calculate total hours from all billable hours
+            total_hours = 0.0
+            for project_hours in hours_by_project.values():
+                for entry in project_hours:
+                    if entry.get('billable') == 'True':
+                        total_hours += float(entry.get('actualHours', 0))
             
             # Process hours for active customers
             processed_entries = []
@@ -620,12 +596,29 @@ class WorkdayTransformer:
             # Generate output file
             temp_file = result_file_path.with_suffix('.tmp')
             try:
-                # Initialize file content as a list of lines
-                file_content = []
+                # First pass: calculate totals
                 total_amount = 0.0
                 total_hours = 0.0
                 header_count = 0
                 detail_count = 0
+
+                # Calculate totals from all entries
+                for group_key, entries in groups.items():
+                    for entry in entries:
+                        task_hours = entry['actualHours']
+                        hourly_rate = entry['hourlyRate']
+                        task_amount = task_hours * hourly_rate
+                        
+                        # Always count hours for every entry
+                        total_hours += task_hours
+                        detail_count += 1
+                        
+                        # Only add to total amount if non-zero
+                        if task_amount > 0:
+                            total_amount += task_amount
+
+                # Log the total hours calculation
+                logger.info(f"Total hours calculation - Found {detail_count} entries with {total_hours:.2f} total hours")
 
                 # Add the constant header lines
                 file_content = [
@@ -635,7 +628,7 @@ class WorkdayTransformer:
                     "Row type R= Row;ConnectID;Grouping info (Memo);Sales Item;Description;Quantity;Unit of measure;Unit price;Dim 1: Cost center;Dim 2: Business line (Function);Dim 3: Area;Dim 4: Service;Dim 5: Project;Dim 7: Counter company;Dim 8: Work type;Dim 10: Official;Dim 11: Employee;Dim 13: Company;Tax_Applicability;Tax_Code;"
                 ]
 
-                # Process each group (invoice)
+                # Second pass: generate invoice rows
                 for group_key, entries in groups.items():
                     connect_id = str(uuid.uuid4())
                     customer_info = group_to_customer_info[group_key]
@@ -661,9 +654,6 @@ class WorkdayTransformer:
                             )
                             continue
                             
-                        total_amount += task_amount
-                        total_hours += task_hours
-                        detail_count += 1
                         invoice_total += task_amount
 
                         logger.info(
@@ -739,8 +729,15 @@ class WorkdayTransformer:
                 with open(temp_file, mode='w', encoding='cp1252', errors='replace', newline='') as f:
                     f.write("\n".join(file_content))
 
+                # Convert groups to entries_by_customer format
+                entries_by_customer: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+                for group_key, entries in groups.items():
+                    customer_info = group_to_customer_info[group_key]
+                    customer_id = customer_info.get('Account A2 Ext ID', '')
+                    entries_by_customer[customer_id].extend(entries)
+
                 # Write the invoicing summary with the same totals
-                self._write_invoicing_summary(groups, result_file_path, total_amount, total_hours, header_count, detail_count, first_day, last_day)
+                self._write_invoicing_summary(entries_by_customer, result_file_path, total_amount, total_hours, header_count, detail_count, first_day, last_day)
 
                 # Rename temp file to final file
                 temp_file.replace(result_file_path)

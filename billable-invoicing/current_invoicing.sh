@@ -4,8 +4,8 @@
 current_month=$(date '+%m')
 current_year=$(date '+%Y')
 
-# Zero-pad the month if necessary
-current_month=$(printf "%02d" $current_month)
+# Calculate previous month
+previous_month=$((10#$current_month - 1))
 
 # Get the number of days in the current month
 if [ $current_month -eq 4 ] || [ $current_month -eq 6 ] || [ $current_month -eq 9 ] || [ $current_month -eq 11 ]; then

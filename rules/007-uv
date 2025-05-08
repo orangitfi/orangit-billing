@@ -1,0 +1,9 @@
+name: rules/007-uv
+description: "Use uv for Python execution and package management"
+rules:
+  - Always use `uv` instead of `python` directly for running Python code
+  - Use `uv run` for executing Python modules and scripts
+  - Use `uv add` for package management instead of pip
+  - Use `uv venv` for virtual environment management
+  - Use `uv ruff` for linting and formatting
+  - "Example: `uv run python -m billable_invoicing` instead of `python -m billable_invoicing`" 

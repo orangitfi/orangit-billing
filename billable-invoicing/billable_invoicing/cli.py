@@ -13,6 +13,7 @@ from dateutil import parser
 
 from .agileday import AgileDayClient
 from .transformer import TimeEntryTransformer
+from .utilization_transformer import UtilizationTransformer
 from .workday_transformer import WorkdayTransformer
 
 # Configure logging
@@ -268,6 +269,65 @@ def fetch_hours(
         
         if failed_entries:
             sys.exit(1)
+
+@cli.command()
+@click.option(
+    '--customer-data',
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help='Path to customer data CSV file (e.g., customer.csv)'
+)
+@click.option(
+    '--raw-hours',
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help='Path to raw hours CSV file'
+)
+@click.option(
+    '--output',
+    required=True,
+    type=click.Path(dir_okay=False, writable=True),
+    help='Path to write the result file'
+)
+@click.option(
+    '--start-date',
+    callback=validate_date,
+    help='Start date for filtering hours (YYYY-MM-DD)'
+)
+@click.option(
+    '--end-date',
+    callback=validate_date,
+    help='End date for filtering hours (YYYY-MM-DD)'
+)
+@click.option(
+    '-v', '--verbose',
+    is_flag=True,
+    help='Enable verbose logging'
+)
+def util(
+    customer_data: str,
+    raw_hours: str,
+    output: str,
+    start_date: datetime,
+    end_date: datetime,
+    verbose: bool
+) -> None:
+    """Generate utilization metrics from time entries."""
+    configure_logging(verbose)
+    
+    try:
+        transformer = UtilizationTransformer()
+        transformer.transform_to_utilization(
+            customer_data_path=Path(customer_data),
+            raw_hours_path=Path(raw_hours),
+            result_file_path=Path(output),
+            start_date=start_date.date() if start_date else None,
+            end_date=end_date.date() if end_date else None
+        )
+        logger.info("Successfully wrote utilization metrics to %s", output)
+    except Exception as e:
+        logger.error("Failed to process utilization metrics: %s", str(e))
+        sys.exit(1)
 
 if __name__ == '__main__':
     cli() 

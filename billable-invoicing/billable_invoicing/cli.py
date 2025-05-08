@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 import click
 from dateutil import parser
@@ -279,9 +279,8 @@ def fetch_hours(
 )
 @click.option(
     '--raw-hours',
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, readable=True),
-    help='Path to raw hours CSV file'
+    type=click.Path(dir_okay=False, writable=True),
+    help='Path to save raw hours CSV file. Defaults to raw_hours.csv in the output directory.'
 )
 @click.option(
     '--output',
@@ -291,13 +290,20 @@ def fetch_hours(
 )
 @click.option(
     '--start-date',
+    required=True,
     callback=validate_date,
     help='Start date for filtering hours (YYYY-MM-DD)'
 )
 @click.option(
     '--end-date',
+    required=True,
     callback=validate_date,
     help='End date for filtering hours (YYYY-MM-DD)'
+)
+@click.option(
+    '--status',
+    default='Submitted',
+    help='Status of entries to fetch (default: Submitted)'
 )
 @click.option(
     '-v', '--verbose',
@@ -306,28 +312,62 @@ def fetch_hours(
 )
 def util(
     customer_data: str,
-    raw_hours: str,
+    raw_hours: Optional[str],
     output: str,
     start_date: datetime,
     end_date: datetime,
+    status: str,
     verbose: bool
 ) -> None:
-    """Generate utilization metrics from time entries."""
+    """Transform time entries to utilization metrics."""
     configure_logging(verbose)
     
     try:
+        # Initialize clients
+        client = AgileDayClient()
         transformer = UtilizationTransformer()
+        
+        # Verify input files exist and are readable
+        customer_data_path = Path(customer_data)
+        if not customer_data_path.is_file():
+            raise ValueError(f"Customer data file not found: {customer_data}")
+        if not os.access(customer_data_path, os.R_OK):
+            raise ValueError(f"Customer data file is not readable: {customer_data}")
+        
+        # Create output directory if it doesn't exist
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Determine where to save raw hours
+        if raw_hours:
+            raw_hours_path = Path(raw_hours)
+            raw_hours_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            raw_hours_path = output_path.parent / "raw_hours.csv"
+        
+        # Fetch data from AgileDay
+        logger.info("Fetching time entries from AgileDay...")
+        entries = client.get_time_entries(start_date, end_date, status)
+        logger.info("Fetched %d time entries from AgileDay", len(entries))
+        
+        # Write raw data to CSV
+        transformer.transform_to_csv(entries, raw_hours_path)
+        logger.info("Wrote raw entries to %s", raw_hours_path)
+        
+        # Transform to utilization
         transformer.transform_to_utilization(
-            customer_data_path=Path(customer_data),
-            raw_hours_path=Path(raw_hours),
-            result_file_path=Path(output),
-            start_date=start_date.date() if start_date else None,
-            end_date=end_date.date() if end_date else None
+            customer_data_path=customer_data_path,
+            result_file_path=output_path,
+            start_date=start_date.date(),
+            end_date=end_date.date(),
+            raw_hours_path=raw_hours_path
         )
-        logger.info("Successfully wrote utilization metrics to %s", output)
+        
+        logger.info("Successfully wrote utilization data to %s", output)
+        
     except Exception as e:
-        logger.error("Failed to process utilization metrics: %s", str(e))
-        sys.exit(1)
+        logger.error("Failed to process utilization data: %s", str(e))
+        raise
 
 if __name__ == '__main__':
     cli() 

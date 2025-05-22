@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .agileday import AgileDayClient
+from .config import ROLE_EMAILS
 
 logger = logging.getLogger(__name__)
 
@@ -693,14 +694,10 @@ class UtilizationTransformer:
             Role of the employee
         """
         email = email.lower()
-        if email in ['jalle.nyberg@orangit.fi', 'miikka.roini@orangit.fi', 'jenna.salo@orangit.fi']:
-            return 'Backoffice'
-        elif email in ['marita.klaavu@orangit.fi', 'sami.bister@orangit.fi', 'paula.hassel@orangit.fi', 'mikael.kemppainen@orangit.fi']:
-            return 'Service Lead'
-        elif email in ['tea.kauppinen@orangit.fi', 'ossi.pihlaniemi@orangit.fi', 'ika.kattainen@orangit.fi', 'daniel.ramos@orangit.fi']:
-            return 'Team Lead'
-        else:
-            return 'Engineer'
+        for role, emails in ROLE_EMAILS.items():
+            if email in [e.lower() for e in emails]:
+                return role
+        return 'Engineer'
 
     def _write_role_summary(
         self,

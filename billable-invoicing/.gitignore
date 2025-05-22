@@ -270,4 +270,21 @@ $RECYCLE.BIN/
 *.csv
 *.xlsx
 .python-version
+
+# Configuration
+billable_invoicing/config.py
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,macos,linux,python,visualstudiocode

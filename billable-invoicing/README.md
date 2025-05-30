@@ -43,7 +43,29 @@ Before you begin, ensure you have:
    mkdir -p src/orangit/orangit-billing/
    ```
 
-3. Repository cloned to your local machine
+4. Store token as environment variable:
+
+    ```bash
+    # Set AGILEDAY_TOKEN environment variable
+    export AGILEDAY_TOKEN='your-token-here'
+    
+    # Verify the token is set
+    echo $AGILEDAY_TOKEN
+    ```
+
+5. Update Code
+
+Open terminal and update the code to the latest version:
+
+```bash
+# Navigate to the repository directory
+cd $HOME/src/orangit/orangit-billing
+
+# Pull latest changes
+git pull
+```
+
+6. Repository cloned to your local machine
 
    ```bash
    # Navigate to the repository directory
@@ -60,7 +82,50 @@ Before you begin, ensure you have:
 
 Most users will use `hours_invoicing.sh` to process the previous month's billable hours. Here's the step-by-step process:
 
-### 1. Directory Setup
+### 1. Get AgileDay API Token
+
+This may have been done, depending in which order you execute scripts.
+
+Before starting the invoicing process, you need an AgileDay API token:
+
+1. Contact AgileDay administrators for OrangIT
+2. Retrive a new API token from AgileDay, Settings => Integrations => API Tokens. Expiration can be the default 12 hrs.
+3. Once received, store the token securely in 1Password:
+   - Vault: `orangit-billing`
+   - Item: `agileday-api-token`
+4. Retrieve token from 1Password:
+   - Open 1Password
+   - Navigate to vault `orangit-billing`
+   - Find item `agileday-api-token`
+   - Copy the token value
+
+5. Store token as environment variable:
+
+   ```bash
+   # Set AGILEDAY_TOKEN environment variable
+   export AGILEDAY_TOKEN='your-token-here'
+   
+   # Verify the token is set
+   echo $AGILEDAY_TOKEN
+   ```
+
+### 2. Update Code
+
+This may have been done, depending in which order you execute scripts.
+
+Open terminal and update the code to the latest version:
+
+```bash
+# Navigate to the repository directory
+cd $HOME/src/orangit/orangit-billing
+
+# Pull latest changes
+git pull
+```
+
+### 3. Directory Setup
+
+This may have been done, depending in which order you execute scripts.
 
 Create a directory structure for invoicing data:
 
@@ -72,11 +137,13 @@ mkdir -p $HOME/laskutus/YYYY-MM
 mkdir -p $HOME/laskutus/2025-04
 ```
 
-### 2. Get Required Data Files
+### 4. Get Required Data Files
 
 You need two CSV files from the Client Master Data Google Sheet:
 
 #### Customer Data File
+
+This may have been done, depending in which order you execute scripts.
 
 1. Open the Client Master Data sheet
 2. Go to sheet "Taulukko1"
@@ -92,7 +159,7 @@ You need two CSV files from the Client Master Data Google Sheet:
    - File menu → Download → Comma-separated values (.csv)
 4. Rename the downloaded file to `rates.csv`
 
-### 3. Place Files in Directory
+### 5. Place Files in Directory
 
 Copy both files to your month-specific directory:
 
@@ -106,7 +173,7 @@ cp customer.csv $HOME/laskutus/2025-04/
 cp rates.csv $HOME/laskutus/2025-04/
 ```
 
-### 4. Run the Script
+### 6. Run the Script
 
 Execute the hours invoicing script:
 
@@ -114,7 +181,7 @@ Execute the hours invoicing script:
 sh ./hours_invoicing.sh
 ```
 
-### 5. Check Results
+### 7. Check Results
 
 After running the script, check these files in your month directory:
 

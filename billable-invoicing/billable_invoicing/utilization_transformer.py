@@ -808,10 +808,10 @@ class UtilizationTransformer:
     def transform_to_utilization(
         self,
         customer_data_path: Path,
+        raw_hours_path: Path,
         result_file_path: Path,
         start_date: Optional[datetime.date] = None,
-        end_date: Optional[datetime.date] = None,
-        raw_hours_path: Optional[Path] = None
+        end_date: Optional[datetime.date] = None
     ) -> None:
         """Transform time entries to utilization metrics.
 
@@ -819,19 +819,19 @@ class UtilizationTransformer:
         ----------
         customer_data_path : Path
             Path to customer data CSV file
+        raw_hours_path : Path
+            Path to raw hours CSV file
         result_file_path : Path
             Path to write the result file
         start_date : Optional[datetime.date]
             Start date for filtering hours (inclusive)
         end_date : Optional[datetime.date]
             End date for filtering hours (inclusive)
-        raw_hours_path : Optional[Path]
-            Path to raw hours CSV file. If not provided, hours will be fetched from AgileDay.
         """
         # Verify input files exist and are readable
         if not customer_data_path.is_file():
             raise ValueError(f"Customer data file not found: {customer_data_path}")
-        if raw_hours_path and not raw_hours_path.is_file():
+        if not raw_hours_path.is_file():
             raise ValueError(f"Raw hours file not found: {raw_hours_path}")
 
         try:

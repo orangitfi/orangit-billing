@@ -40,7 +40,8 @@ class WorkdayTransformer:
         str
             Formatted number with period as decimal separator
         """
-        return f"{value:.2f}"  # No need to replace, period is Python's default
+        # Use a fixed format with exactly 2 decimal places
+        return f"{value:.2f}".replace(',', '.')  # Ensure period is used as decimal separator
 
     def _read_customer_data(self, customer_data_path: Path) -> Dict[str, Dict[str, Any]]:
         """Read customer data from CSV file and filter for active projects.
@@ -269,7 +270,8 @@ class WorkdayTransformer:
         first_day: Optional[datetime.date],
         last_day: Optional[datetime.date]
     ) -> None:
-        """Write a summary of invoicing data."""
+        """Write a summary of invoicing data in both text and CSV formats."""
+        # Write text summary
         summary_file = result_file_path.with_stem(f"{result_file_path.stem}_summary")
         
         try:
@@ -328,6 +330,107 @@ class WorkdayTransformer:
                 f.write("=" * 80 + "\n")
                     
             logger.info("Wrote invoicing summary to %s", summary_file)
+            
+            # Write CSV summary
+            csv_summary_file = result_file_path.with_stem(f"{result_file_path.stem}_summary_column")
+            with open(csv_summary_file, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+                # Write header
+                writer.writerow([
+                    'Customer Name',
+                    'Service Name',
+                    'ConnectID',
+                    'Invoice A2 ID',
+                    'Account A2 ID',
+                    'Grouping info (Memo)',
+                    'Sales Item',
+                    'Description',
+                    'Quantity',
+                    'Unit price',
+                    'Amount'
+                ])
+                
+                # Track CSV summary total and individual amounts
+                csv_total_amount = 0.0
+                csv_amounts = []  # List to store individual amounts
+                
+                # Write data rows
+                for customer_id, entries in entries_by_customer.items():
+                    if not entries:
+                        continue
+                        
+                    customer_info = entries[0]['customer_info']
+                    client_name = customer_info.get('Client', 'Unknown')
+                    
+                    # Generate a ConnectID for this customer group
+                    connect_id = str(uuid.uuid4())
+                    
+                    # Group entries by service and task
+                    service_task_entries: Dict[tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
+                    for entry in entries:
+                        service = entry['customer_info'].get('Service name', 'Unknown Service')
+                        task = entry['projectTask']
+                        service_task_entries[(service, task)].append(entry)
+                    
+                    # Write each service/task combination
+                    for (service, task), task_entries in service_task_entries.items():
+                        task_hours = sum(entry['actualHours'] for entry in task_entries)
+                        hour_rate = task_entries[0]['hourlyRate']
+                        amount = task_hours * hour_rate
+                        
+                        # Store the raw amount before formatting
+                        csv_amounts.append(amount)
+                        csv_total_amount += amount
+                        
+                        # Log detailed calculation for debugging
+                        logger.debug(
+                            "CSV Summary - Client: %s, Service: %s, Task: %s, Hours: %.2f, Rate: %.2f, Amount: %.2f",
+                            client_name, service, task, task_hours, hour_rate, amount
+                        )
+                        
+                        description = (
+                            f"{task_entries[0].get('projectName', '')} - "
+                            f"{customer_info.get('Billable Description', '')} - "
+                            f"{task}"
+                        )
+                        
+                        # Format numeric values consistently
+                        formatted_hours = self._format_decimal(task_hours)
+                        formatted_rate = self._format_decimal(hour_rate)
+                        formatted_amount = self._format_decimal(amount)
+                        
+                        writer.writerow([
+                            client_name,  # Customer name as first column
+                            service,  # Service name as second column
+                            connect_id,  # Use generated ConnectID
+                            customer_info.get('Invoice Info A2 Ext Id', ''),
+                            customer_info.get('Account A2 Ext ID', ''),
+                            task_entries[0].get('projectName', ''),  # Grouping info
+                            customer_info.get('Sales Item hours', ''),
+                            description,
+                            formatted_hours,
+                            formatted_rate,
+                            formatted_amount
+                        ])
+                
+                # Calculate sum from individual amounts
+                sum_from_amounts = sum(csv_amounts)
+                
+                # Log detailed comparison
+                logger.info("Amount comparison details:")
+                logger.info("Main total: %.2f", total_amount)
+                logger.info("CSV running total: %.2f", csv_total_amount)
+                logger.info("Sum from individual amounts: %.2f", sum_from_amounts)
+                logger.info("Difference (Main - CSV): %.2f", total_amount - csv_total_amount)
+                logger.info("Difference (Main - Sum): %.2f", total_amount - sum_from_amounts)
+                logger.info("Difference (CSV - Sum): %.2f", csv_total_amount - sum_from_amounts)
+                
+                # Log individual amounts for verification
+                logger.info("Individual amounts in CSV:")
+                for i, amount in enumerate(csv_amounts, 1):
+                    logger.info("Row %d: %.2f", i, amount)
+            
+            logger.info("Wrote CSV summary to %s", csv_summary_file)
             logger.info(
                 "Summary totals - Invoices: %d, Lines: %d, Amount: %.2f",
                 total_invoices, total_lines, total_amount
@@ -604,18 +707,21 @@ class WorkdayTransformer:
 
                 # Calculate totals from all entries
                 for group_key, entries in groups.items():
+                    # Group entries by task first
+                    task_entries: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
                     for entry in entries:
-                        task_hours = entry['actualHours']
-                        hourly_rate = entry['hourlyRate']
+                        task_name = entry.get('projectTask', '')
+                        task_entries[task_name].append(entry)
+                    
+                    # Calculate totals using the same method as CSV
+                    for task_name, task_entries_list in task_entries.items():
+                        task_hours = sum(entry['actualHours'] for entry in task_entries_list)
+                        hourly_rate = task_entries_list[0]['hourlyRate']
                         task_amount = task_hours * hourly_rate
                         
-                        # Always count hours for every entry
                         total_hours += task_hours
-                        detail_count += 1
-                        
-                        # Only add to total amount if non-zero
-                        if task_amount > 0:
-                            total_amount += task_amount
+                        total_amount += task_amount
+                        detail_count += len(task_entries_list)
 
                 # Log the total hours calculation
                 logger.info(f"Total hours calculation - Found {detail_count} entries with {total_hours:.2f} total hours")
@@ -633,22 +739,28 @@ class WorkdayTransformer:
                     connect_id = str(uuid.uuid4())
                     customer_info = group_to_customer_info[group_key]
                     
+                    # Group entries by task first
+                    task_entries: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+                    for entry in entries:
+                        task_name = entry.get('projectTask', '')
+                        task_entries[task_name].append(entry)
+                    
                     # Collect non-zero rows first
                     invoice_rows = []
                     invoice_total = 0.0
                     
-                    # Process each entry (already grouped by project and task)
-                    for entry in entries:
-                        task_hours = entry['actualHours']
-                        hourly_rate = entry['hourlyRate']
+                    # Process each task group
+                    for task_name, task_entries_list in task_entries.items():
+                        task_hours = sum(entry['actualHours'] for entry in task_entries_list)
+                        hourly_rate = task_entries_list[0]['hourlyRate']
                         task_amount = task_hours * hourly_rate
                         
                         # Skip rows with zero amount
                         if task_amount == 0:
                             logger.debug(
                                 "Skipping zero amount row - Project: %s, Task: %s, Hours: %.2f, Rate: %.2f",
-                                entry['projectName'],
-                                entry['projectTask'],
+                                task_entries_list[0]['projectName'],
+                                task_name,
                                 task_hours,
                                 hourly_rate
                             )
@@ -658,20 +770,20 @@ class WorkdayTransformer:
 
                         logger.info(
                             "Project: %s, Task: %s, Hours: %.2f, Rate: %.2f, Amount: %.2f",
-                            entry['projectName'],
-                            entry['projectTask'],
+                            task_entries_list[0]['projectName'],
+                            task_name,
                             task_hours,
                             hourly_rate,
                             task_amount
                         )
 
                         description = (
-                            f"{entry['projectName']} - "
+                            f"{task_entries_list[0]['projectName']} - "
                             f"{customer_info.get('Billable Description', '')} - "
-                            f"{entry['projectTask']}"
+                            f"{task_name}"
                         )
                         detail_row = [
-                            "R", connect_id, entry['projectName'],
+                            "R", connect_id, task_entries_list[0]['projectName'],
                             customer_info.get('Sales Item hours', ''),
                             description, self._format_decimal(task_hours), "",
                             self._format_decimal(hourly_rate),

@@ -751,52 +751,54 @@ class WorkdayTransformer:
                     
                     # Process each task group
                     for task_name, task_entries_list in task_entries.items():
-                        task_hours = sum(entry['actualHours'] for entry in task_entries_list)
-                        hourly_rate = task_entries_list[0]['hourlyRate']
-                        task_amount = task_hours * hourly_rate
-                        
-                        # Skip rows with zero amount
-                        if task_amount == 0:
-                            logger.debug(
-                                "Skipping zero amount row - Project: %s, Task: %s, Hours: %.2f, Rate: %.2f",
-                                task_entries_list[0]['projectName'],
+                        # Process each individual entry instead of combining them
+                        for entry in task_entries_list:
+                            task_hours = float(entry.get('actualHours', 0))
+                            hourly_rate = entry['hourlyRate']
+                            task_amount = task_hours * hourly_rate
+                            
+                            # Skip rows with zero amount
+                            if task_amount == 0:
+                                logger.debug(
+                                    "Skipping zero amount row - Project: %s, Task: %s, Hours: %.2f, Rate: %.2f",
+                                    entry['projectName'],
+                                    task_name,
+                                    task_hours,
+                                    hourly_rate
+                                )
+                                continue
+                                
+                            invoice_total += task_amount
+
+                            logger.info(
+                                "Project: %s, Task: %s, Hours: %.2f, Rate: %.2f, Amount: %.2f",
+                                entry['projectName'],
                                 task_name,
                                 task_hours,
-                                hourly_rate
+                                hourly_rate,
+                                task_amount
                             )
-                            continue
-                            
-                        invoice_total += task_amount
 
-                        logger.info(
-                            "Project: %s, Task: %s, Hours: %.2f, Rate: %.2f, Amount: %.2f",
-                            task_entries_list[0]['projectName'],
-                            task_name,
-                            task_hours,
-                            hourly_rate,
-                            task_amount
-                        )
-
-                        description = (
-                            f"{task_entries_list[0]['projectName']} - "
-                            f"{customer_info.get('Billable Description', '')} - "
-                            f"{task_name}"
-                        )
-                        detail_row = [
-                            "R", connect_id, task_entries_list[0]['projectName'],
-                            customer_info.get('Sales Item hours', ''),
-                            description, self._format_decimal(task_hours), "",
-                            self._format_decimal(hourly_rate),
-                            self.dimensions['cost_center'],
-                            self.dimensions['business_line'],
-                            self.dimensions['area'],
-                            self.dimensions['service'],
-                            "", "", "", "", "", "",
-                            customer_info.get('Tax_Applicability', ''),
-                            customer_info.get('Tax_Code', ''),
-                            ""
-                        ]
-                        invoice_rows.append(";".join(detail_row))
+                            description = (
+                                f"{entry['projectName']} - "
+                                f"{customer_info.get('Billable Description', '')} - "
+                                f"{task_name}"
+                            )
+                            detail_row = [
+                                "R", connect_id, entry['projectName'],
+                                customer_info.get('Sales Item hours', ''),
+                                description, self._format_decimal(task_hours), "",
+                                self._format_decimal(hourly_rate),
+                                self.dimensions['cost_center'],
+                                self.dimensions['business_line'],
+                                self.dimensions['area'],
+                                self.dimensions['service'],
+                                "", "", "", "", "", "",
+                                customer_info.get('Tax_Applicability', ''),
+                                customer_info.get('Tax_Code', ''),
+                                ""
+                            ]
+                            invoice_rows.append(";".join(detail_row))
 
                     # Only write invoice if it has non-zero rows
                     if invoice_rows:

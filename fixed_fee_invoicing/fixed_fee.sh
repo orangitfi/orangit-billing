@@ -20,7 +20,6 @@ previous_month=$(printf "%02d" $previous_month)
 
 # Construct the date string
 DATE_STR="$previous_year-$previous_month"
-echo "DATE_STR: $DATE_STR"
 # move to execution directory
 cd $HOME/src/orangit/orangit-billing/fixed_fee_invoicing
 # Construct and run the Python command

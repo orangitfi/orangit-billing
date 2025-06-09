@@ -44,6 +44,7 @@ CONFIG_CONTRACT_NUMBER: int = 32
 CONFIG_ID: int = 33
 CONFIG_CUSTOMER_REFERENCE = 34
 CONFIG_OUR_REFERENCE = 35
+CONFIG_PERIOD = 40  # New column for period (pre/post)
 
 
 def parse_arguments():
@@ -126,6 +127,7 @@ def read_config(config_path):
                     "contract_number": row[CONFIG_CONTRACT_NUMBER],
                     "customer_reference": row[CONFIG_CUSTOMER_REFERENCE],
                     "our_reference": row[CONFIG_OUR_REFERENCE],
+                    "period": row[CONFIG_PERIOD] if len(row) > CONFIG_PERIOD else "post",  # Default to "post" if column doesn't exist
                 }
                 config_data.append(conf_record)
     print(f"Read {len(config_data)} active config rows.")
@@ -229,11 +231,11 @@ def generate_output(
     3) Sum up all row amounts for the second line's big total (65656.95).
     """
 
-    # We’ll collect all lines in a list; then we’ll compute the sum, fill it in,
+    # We'll collect all lines in a list; then we'll compute the sum, fill it in,
     # and finally write them all out.
     output_lines = []
 
-    # We’ll gather row amounts here to compute the total for the second line.
+    # We'll gather row amounts here to compute the total for the second line.
     total_amount = 0.0
     invoice_count = 0
     invoice_line_count = 0
@@ -276,7 +278,7 @@ def generate_output(
         if conf["active"].lower() == "yes":  # or whatever logic for "Active"
             grouped_config[conf["group_invoice"]].append(conf)
 
-    # We know the “Accounting date” is the 2nd day of the *next* month of invoice_month/year.
+    # We know the "Accounting date" is the 2nd day of the *next* month of invoice_month/year.
     # If we are invoicing for 2-2025, the accounting date is 2.3.2025.
     # So let's figure that out:
     # Next month from (invoice_year, invoice_month)
@@ -291,27 +293,6 @@ def generate_output(
     # The "invoicing date" is the date when the script is executed => execution_date
     invoicing_date_str = execution_date.strftime("%Y-%m-%d")
 
-    # The "Period End date" is the last day of that month
-    # A quick trick to get last day of month is next month's first day minus one day
-    if invoice_month == 12:
-        next_month_for_end = 1
-        next_year_for_end = invoice_year + 1
-    else:
-        next_month_for_end = invoice_month + 1
-        next_year_for_end = invoice_year
-    # The "Period Start date" is the first day of the month given in parameters
-    period_start = datetime.date(next_year_for_end, next_month_for_end, 1)
-    period_start_str = period_start.strftime("%Y-%m-%d")
-
-    if next_month_for_end == 12:
-        end_month_for_end = 1
-        end_year_for_end = next_year_for_end + 1
-    else:
-        end_month_for_end = next_month_for_end + 1
-        end_year_for_end = next_year_for_end
-    first_of_next_month = datetime.date(end_year_for_end, end_month_for_end, 1)
-    period_end = first_of_next_month - datetime.timedelta(days=1)
-    period_end_str = period_end.strftime("%Y-%m-%d")
     print("Config lines processing ...")
     # Now generate the lines (Header + Row) for each group
     for group_id, rows in grouped_config.items():
@@ -319,17 +300,40 @@ def generate_output(
         connect_id = str(uuid.uuid4())
 
         # We also want to combine certain config data for the invoice Header line.
-        # According to your specification:
-        # H;ConnectID;Invoice A2 ID (col 25 from config?);Account A2 ID (col 24 from config?);
-        #   Free text; Accounting date; Invoicing date; Our reference; Customer reference (col 11?);
-        #   Period Start; Period End; Contract number; PO number; ...
-        #
-        # But note that the config can have multiple rows for the same group. Potentially,
-        # they might differ for "Invoice A2 ID" or "Customer reference"? You’ll have to decide
-        # which row you use. Below we pick the FIRST row in that group.
-        #
-        # Adjust as needed.
         first_conf_row = rows[0]
+
+        # Get the period value from the first row in the group
+        period = first_conf_row.get("period", "post")
+        
+        if period == "pre":
+            # If period is "pre", use next month for period start/end
+            if invoice_month == 12:
+                next_month_for_end = 1
+                next_year_for_end = invoice_year + 1
+            else:
+                next_month_for_end = invoice_month + 1
+                next_year_for_end = invoice_year
+            period_start = datetime.date(next_year_for_end, next_month_for_end, 1)
+            if next_month_for_end == 12:
+                end_month_for_end = 1
+                end_year_for_end = next_year_for_end + 1
+            else:
+                end_month_for_end = next_month_for_end + 1
+                end_year_for_end = next_year_for_end
+        else:
+            # If period is "post", use current month for period start/end
+            period_start = datetime.date(invoice_year, invoice_month, 1)
+            if invoice_month == 12:
+                end_month_for_end = 1
+                end_year_for_end = invoice_year + 1
+            else:
+                end_month_for_end = invoice_month + 1
+                end_year_for_end = invoice_year
+
+        period_start_str = period_start.strftime("%Y-%m-%d")
+        first_of_next_month = datetime.date(end_year_for_end, end_month_for_end, 1)
+        period_end = first_of_next_month - datetime.timedelta(days=1)
+        period_end_str = period_end.strftime("%Y-%m-%d")
 
         # invoice_info_a2_ext_id => column 25 if zero-based
         invoice_a2_id = first_conf_row["invoice_info_a2_ext_id"]
@@ -337,8 +341,8 @@ def generate_output(
         account_a2_id = first_conf_row["account_a2_ext_id"]
         customer_reference = first_conf_row[
             "invoice_contact_person"
-        ]  # column 11 if that’s correct
-        our_reference = first_conf_row["our_reference"]  # column 35 if that’s correct
+        ]  # column 11 if that's correct
+        our_reference = first_conf_row["our_reference"]  # column 35 if that's correct
         contract_number = first_conf_row["contract_number"]
         customer_reference = first_conf_row["customer_reference"]
 
@@ -425,7 +429,7 @@ def generate_output(
 
             # Now check if we need to add pass-through lines from the input file for this conf row.
             # If the "harvest_id" or some other ID matches something in pass_through_data,
-            # we’d add rows similarly:
+            # we'd add rows similarly:
             # Example:
             harv_id = crow["config_id"]
             # print(f"harv_id: {harv_id}")
@@ -515,6 +519,58 @@ def generate_output(
     print(f"Total amount of lines in the invoices  {invoice_line_count}")
     print(f"Total count of units  {invoice_line_count}")
     print(f"Total euros without VAT {total_amount:.2f}")
+
+    # Generate summary file
+    summary_path = output_path.rsplit(".", 1)[0] + "_summary.csv"
+    with open(summary_path, mode="w", encoding="utf-8", newline="") as summary_file:
+        # Write header
+        summary_writer = csv.writer(summary_file)
+        summary_writer.writerow([
+            "Customer Name",
+            "Service Name",
+            "ConnectID",
+            "Invoice A2 ID",
+            "Account A2 ID",
+            "Grouping info (Memo)",
+            "Sales Item",
+            "Description",
+            "Quantity",
+            "Unit price",
+            "Amount"
+        ])
+
+        # Write data rows - only process rows that start with "R"
+        for line in output_lines:
+            if line.startswith("R;"):
+                fields = line.split(";")
+                # Extract the relevant fields from the row
+                connect_id = fields[1]
+                grouping_info = fields[2]
+                sales_item = fields[3]
+                description = fields[4]
+                quantity = fields[5]
+                unit_price = fields[7]
+
+                # Find the corresponding config row to get customer name and service name
+                for group_id, rows in grouped_config.items():
+                    for crow in rows:
+                        if crow["service_name"] == grouping_info:
+                            summary_writer.writerow([
+                                crow["client"],  # Customer Name
+                                crow["service_name"],  # Service Name
+                                connect_id,  # ConnectID
+                                crow["invoice_info_a2_ext_id"],  # Invoice A2 ID
+                                crow["account_a2_ext_id"],  # Account A2 ID
+                                grouping_info,  # Grouping info (Memo)
+                                sales_item,  # Sales Item
+                                description,  # Description
+                                quantity,  # Quantity
+                                unit_price,  # Unit price
+                                unit_price  # Amount (same as unit price since quantity is 1)
+                            ])
+                            break
+
+    print(f"Summary file written to {summary_path}")
 
 
 def main():

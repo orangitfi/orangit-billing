@@ -190,12 +190,12 @@ def find_pass_through_for_month(input_lines, prev_year, prev_month):
             # the column to the config. Then lines from row[7..200] have the actual data.
             #
             # Because the format is somewhat unclear, we demonstrate the concept:
-            for index in range(12):
+            for index in range(15):
                 col_index: int = index + 35
                 conf_record = {
                     "confid": input_lines[3][col_index],
                     "amount": row[col_index],
-                    "description": row[col_index + 14],
+                    "description": row[col_index + 15],
                 }
                 # conf_line = ";".join(conf_record)
                 pass_through_data.append(conf_record)
@@ -604,15 +604,6 @@ def main():
         input_lines, invoice_year, invoice_month
     )
     print("Passthrough is read ...")
-    # pass_through_data ideally is a dict like:
-    # {
-    #   "harvest_id_1": [
-    #       {"description": "AWS usage", "amount": 123.45},
-    #       {"description": "Some other pass-through", "amount": 300.0},
-    #    ],
-    #   "harvest_id_2": [...],
-    #   ...
-    # }
 
     # The script execution date is "today" by default
     execution_date = datetime.date.today()

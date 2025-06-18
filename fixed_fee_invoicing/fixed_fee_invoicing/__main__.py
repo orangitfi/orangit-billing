@@ -101,8 +101,7 @@ def read_config(config_path):
             if value == "":
                 value = "0.0"
             unit_price = float(value)
-            temp = row[CONFIG_SERVICE_NAME]
-            if unit_price > 0.0 and row[CONFIG_ACTIVE] == "Yes":
+            if row[CONFIG_ACTIVE] == "Yes":
                 conf_record = {
                     "business_id": row[CONFIG_BUSINESS_ID],
                     "client": row[CONFIG_CLIENT],
@@ -274,8 +273,7 @@ def generate_output(
 
     grouped_config = defaultdict(list)
     for conf in config_data:
-        # print(f"conf: {conf}")
-        if conf["active"].lower() == "yes":  # or whatever logic for "Active"
+        if conf["active"].lower() == "yes":
             grouped_config[conf["group_invoice"]].append(conf)
 
     # We know the "Accounting date" is the 2nd day of the *next* month of invoice_month/year.
@@ -296,13 +294,46 @@ def generate_output(
     print("Config lines processing ...")
     # Now generate the lines (Header + Row) for each group
     for group_id, rows in grouped_config.items():
+        # First, check if this group has any non-zero amounts (either fixed fee or pass-through)
+        group_has_non_zero = False
+        group_total = 0.0
+        
+        # Check fixed fees
+        for crow in rows:
+            try:
+                value = re.sub(r"[^0-9.-]", "", crow["monthly_fixed_fee"])
+                if value == "":
+                    value = "0.0"
+                fixed_fee = float(value)
+                if fixed_fee > 0:
+                    group_has_non_zero = True
+                    group_total += fixed_fee
+            except (ValueError, TypeError):
+                continue
+
+        # Check pass-through amounts for this group
+        for crow in rows:
+            harv_id = crow["config_id"]
+            for item in pass_through_data:
+                if item["confid"] == harv_id:
+                    pass_amount_str = item["amount"].replace(",", ".").replace("€", "").replace(" ", "")
+                    try:
+                        pass_amount = float(pass_amount_str)
+                        if pass_amount != 0:
+                            group_has_non_zero = True
+                            group_total += pass_amount
+                    except (ValueError, TypeError):
+                        continue
+
+        # Skip this group if it has no non-zero amounts
+        if not group_has_non_zero:
+            continue
+
         # Generate a single ConnectID for this entire invoice
         connect_id = str(uuid.uuid4())
-
-        # We also want to combine certain config data for the invoice Header line.
         first_conf_row = rows[0]
 
-        # Get the period value from the first row in the group
+        # We also want to combine certain config data for the invoice Header line.
         period = first_conf_row.get("period", "post")
         
         if period == "pre":
@@ -382,72 +413,68 @@ def generate_output(
         #    Description => col 22 from config; Quantity=1; Unit price => col 10 from config
         #    Dim 1=1999; Dim2=IT; Dim3=10091; Dim4=KON; ...
         for crow in rows:
-            grouping_info = crow[
-                "service_name"
-            ]  # or whichever column is "Grouping info (Memo)"
-            sales_item = crow["sales_item_fixed"]  # col 27 if zero-based
-            description = (
-                grouping_info + " - " + crow["fixed_fee_description"]
-            )  # col 22 if zero-based
+            # Check if this fixed fee row has a non-zero amount
             try:
                 value = re.sub(r"[^0-9.-]", "", crow["monthly_fixed_fee"])
-                unit_price = float(value)
+                if value == "":
+                    value = "0.0"
+                fixed_fee = float(value)
             except (ValueError, TypeError):
-                unit_price = 0.0
+                fixed_fee = 0.0
 
-            # Update the total
-            total_amount += unit_price
+            # Only generate the fixed fee row if amount is non-zero
+            if fixed_fee > 0:
+                grouping_info = crow["service_name"]
+                sales_item = crow["sales_item_fixed"]
+                description = grouping_info + " - " + crow["fixed_fee_description"]
+                
+                total_amount += fixed_fee
 
-            row_fields = [
-                "R",  # Row type
-                connect_id,  # ConnectID
-                grouping_info,  # Grouping info (Memo)
-                sales_item,  # Sales item
-                description,  # Description
-                "1",  # Quantity
-                "",  # Unit of measure
-                f"{unit_price:.2f}",  # Unit price
-                "1999",  # Dim 1 (Cost center)
-                "IT",  # Dim 2 (Business line)
-                "10091",  # Dim 3 (Area)
-                "KON",  # Dim 4 (Service)
-                "",  # Dim 5 (Project)
-                "",  # Dim 7 (Counter company)
-                "",  # Dim 8 (Work type)
-                "",  # Dim 10 (Official)
-                "",  # Dim 11 (Employee)
-                "",  # Dim 13 (Company)
-                crow[
-                    "tax_applicability"
-                ],  # Tax_Applicability (col 28 if zero-based => [27])
-                crow["tax_code"],  # Tax_Code (col 30 if zero-based => [29])
-                "",  # Dim 13 (Company)
-            ]
-            row_line = ";".join(row_fields)
-            output_lines.append(row_line)
-            invoice_line_count += 1
+                row_fields = [
+                    "R",  # Row type
+                    connect_id,  # ConnectID
+                    grouping_info,  # Grouping info (Memo)
+                    sales_item,  # Sales item
+                    description,  # Description
+                    "1",  # Quantity
+                    "",  # Unit of measure
+                    f"{fixed_fee:.2f}",  # Unit price
+                    "1999",  # Dim 1 (Cost center)
+                    "IT",  # Dim 2 (Business line)
+                    "10091",  # Dim 3 (Area)
+                    "KON",  # Dim 4 (Service)
+                    "",  # Dim 5 (Project)
+                    "",  # Dim 7 (Counter company)
+                    "",  # Dim 8 (Work type)
+                    "",  # Dim 10 (Official)
+                    "",  # Dim 11 (Employee)
+                    "",  # Dim 13 (Company)
+                    crow["tax_applicability"],  # Tax_Applicability
+                    crow["tax_code"],  # Tax_Code
+                    "",  # Dim 13 (Company)
+                ]
+                row_line = ";".join(row_fields)
+                output_lines.append(row_line)
+                invoice_line_count += 1
 
-            # Now check if we need to add pass-through lines from the input file for this conf row.
-            # If the "harvest_id" or some other ID matches something in pass_through_data,
-            # we'd add rows similarly:
-            # Example:
+            # Always process pass-through lines, regardless of amount
             harv_id = crow["config_id"]
-            # print(f"harv_id: {harv_id}")
-            # print(f"pass_through_data: {pass_through_data}")
             for item in pass_through_data:
                 if item["confid"] == harv_id:
                     pass_desc = item["description"]
-                    pass_amount_str = item["amount"].replace(",", ".")
-                    pass_amount_str = pass_amount_str.replace("€", "")
-                    pass_amount_str = pass_amount_str.replace(" ", "")
-                    pass_amount = float(pass_amount_str)
-                    total_amount += pass_amount
+                    pass_amount_str = item["amount"].replace(",", ".").replace("€", "").replace(" ", "")
+                    try:
+                        pass_amount = float(pass_amount_str)
+                    except (ValueError, TypeError):
+                        continue
 
+                    total_amount += pass_amount
+                    
                     row_fields_pt = [
                         "R",
                         connect_id,
-                        grouping_info,
-                        sales_item,
+                        crow["service_name"],
+                        crow["sales_item_fixed"],
                         pass_desc,
                         "1",
                         "",
@@ -469,37 +496,6 @@ def generate_output(
                     row_line_pt = ";".join(row_fields_pt)
                     output_lines.append(row_line_pt)
                     invoice_line_count += 1
-                # Suppose pass_through_data[harv_id] is a list of { 'description': ..., 'amount': ... }
-                # for item in pass_through_data[harv_id]:
-                #     # Build row line for pass-through
-                #     pass_desc = item["description"]  # e.g. from input file col+13
-                #     pass_amount = float(item["amount"])
-                #     total_amount += pass_amount
-
-                #     row_fields_pt = [
-                #         "R",  # Row type
-                #         connect_id,  # same ConnectID
-                #         grouping_info,  # same grouping
-                #         sales_item,  # possibly the same or a different "Sales Item"?
-                #         pass_desc,  # from the input file
-                #         "1",  # Quantity
-                #         "",  # Unit measure
-                #         f"{pass_amount:.2f}",
-                #         "1999",
-                #         "IT",
-                #         "10091",
-                #         "KON",
-                #         "",
-                #         "",
-                #         "",
-                #         "",
-                #         "",
-                #         "",
-                #         crow["tax_applicability"],
-                #         crow["tax_code"],
-                #     ]
-                #     row_line_pt = ";".join(row_fields_pt)
-                #     output_lines.append(row_line_pt)
 
         # End for each row in that group
     # End for each group
